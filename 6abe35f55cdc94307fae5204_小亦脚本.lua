@@ -335,6 +335,7 @@ local PYHubEntry = function(loaderUrl, nodeUrl, scriptId, scriptVersion, _unused
 	local flag9, flag10, fn46, fn47, fn48, fn49, tbl10, fn50, tbl11, tbl12
 	local tbl13, tbl14, tbl15, fn51, tbl16, tbl17, fn52, fn53, PoliceSettings, fn54
 	local MovementSettings, fn55, fn56, fn57, fn58, flag11, getSpeedLimitAtPos, fn59
+	local xyGodEnabled, xyFlyEnabled, xyNoclipEnabled, xySpeedEnabled, xyInteractEnabled, xyStaminaEnabled
 
 	do
 	local FlyState, fn60
@@ -356,6 +357,9 @@ local PYHubEntry = function(loaderUrl, nodeUrl, scriptId, scriptVersion, _unused
 
 	if v34 == "FireServer" and arg11.Name == "PlayerEvent" then
 	local v36 = ({ ... })[1]
+	if v36 == "takeDamage" and xyGodEnabled then
+	return
+	end
 	if v36 == "char2" or v36 == "coreGame" or v36 == "vehicleTrack" or v36 == "platform" or v36 == "messageDeliver" or v36 == "runOverVictim" or v36 == "DEBUG2" or v36 == "chatCommand" or v36 == "controlsGuide" then
 	return
 	end
@@ -585,12 +589,8 @@ local PYHubEntry = function(loaderUrl, nodeUrl, scriptId, scriptVersion, _unused
 			end)
 		end)
 	end
-	local windUiSrc = game:HttpGet("https://raw.githubusercontent.com/123fa98/Xi_Pro/refs/heads/main/UI.lua")
-	lib = loadstring(windUiSrc)()
-	if not lib then
-		warn("[PY Hub] WindUI 加载失败，请检查网络或 HttpGet")
-		return
-	end
+	-- WindUI 已移除，使用自定义 UI
+	lib = nil
 
 	tbl8 = {
 	randomBg = true,
@@ -601,7 +601,7 @@ local PYHubEntry = function(loaderUrl, nodeUrl, scriptId, scriptVersion, _unused
 
 	fn65 = function()
 	local ok, result = pcall(function()
-	return readfile("PYHub_Settings.txt")
+	return readfile("小亦_Settings.txt")
 	end)
 
 	if ok and result then
@@ -619,7 +619,7 @@ local PYHubEntry = function(loaderUrl, nodeUrl, scriptId, scriptVersion, _unused
 
 	fn41 = function()
 	pcall(function()
-	writefile("PYHub_Settings.txt", HttpService:JSONEncode(tbl8))
+	writefile("小亦_Settings.txt", HttpService:JSONEncode(tbl8))
 	end)
 	end
 
@@ -2859,6 +2859,233 @@ local PYHubEntry = function(loaderUrl, nodeUrl, scriptId, scriptVersion, _unused
 	end
 	end)
 
+	-- ====== 小亦 人物功能 + 传送 ======
+	xyGodEnabled = false
+	xyFlyEnabled = false
+	xyNoclipEnabled = false
+	xySpeedEnabled = false
+	xyInteractEnabled = false
+	xyStaminaEnabled = false
+
+	local xyFlySpeed = 50
+	local xySpeedValue = 20
+	local xyHoldTime = 0
+	local xyDistance = 25
+
+	local xyStaminaEvent
+	pcall(function()
+		xyStaminaEvent = ReplicatedStorage:WaitForChild("Remote", 5):WaitForChild("PlayerEvent", 5)
+	end)
+
+	-- 无限体力
+	task.spawn(function()
+		while true do
+			if xyStaminaEnabled and xyStaminaEvent then
+				pcall(function() xyStaminaEvent:FireServer("setStaminaOrFood", "stamina", 100) end)
+			end
+			task.wait(0.3)
+		end
+	end)
+
+	-- 飞行
+	local xyFlyBV, xyFlyBG, xyFlyGyroConn
+
+	local function xyStartFly()
+		if xyFlyEnabled then return end
+		local char = localPlayer3.Character
+		if not char then return end
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if not hrp then return end
+		xyFlyEnabled = true
+		xyFlyBV = Instance.new("BodyVelocity", hrp)
+		xyFlyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+		xyFlyBV.Velocity = Vector3.zero
+		xyFlyBG = Instance.new("BodyGyro", hrp)
+		xyFlyBG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+		xyFlyBG.D = 5000
+		xyFlyBG.P = 100000
+		xyFlyBG.CFrame = Workspace.CurrentCamera.CFrame
+		xyFlyGyroConn = RunService.RenderStepped:Connect(function()
+			if xyFlyBG and xyFlyBG.Parent then
+				xyFlyBG.CFrame = Workspace.CurrentCamera.CFrame
+			end
+		end)
+	end
+
+	local function xyStopFly()
+		if not xyFlyEnabled then return end
+		xyFlyEnabled = false
+		if xyFlyGyroConn then xyFlyGyroConn:Disconnect() xyFlyGyroConn = nil end
+		if xyFlyBV then pcall(function() xyFlyBV:Destroy() end) xyFlyBV = nil end
+		if xyFlyBG then pcall(function() xyFlyBG:Destroy() end) xyFlyBG = nil end
+	end
+
+	local function xyFlyMove(direction)
+		if not xyFlyEnabled then return end
+		local hrp = localPlayer3.Character and localPlayer3.Character:FindFirstChild("HumanoidRootPart")
+		if not hrp or not xyFlyBV then return end
+		local cam = Workspace.CurrentCamera
+		local dir = Vector3.zero
+		if direction == "W" then dir = cam.CFrame.LookVector
+		elseif direction == "S" then dir = -cam.CFrame.LookVector
+		elseif direction == "A" then dir = -cam.CFrame.RightVector
+		elseif direction == "D" then dir = cam.CFrame.RightVector
+		elseif direction == "up" then dir = Vector3.new(0, 1, 0)
+		elseif direction == "down" then dir = Vector3.new(0, -1, 0)
+		end
+		xyFlyBV.Velocity = dir * xyFlySpeed
+		task.spawn(function()
+			for i = 1, 8 do
+				task.wait(0.08)
+				if not xyFlyEnabled or not xyFlyBV then break end
+				xyFlyBV.Velocity = dir * xyFlySpeed
+			end
+			if xyFlyBV then xyFlyBV.Velocity = Vector3.zero end
+		end)
+	end
+
+	localPlayer3.CharacterAdded:Connect(function()
+		if xyFlyEnabled then
+			xyStopFly()
+			task.wait(0.3)
+			xyStartFly()
+		end
+	end)
+
+	-- 飞行键盘控制
+	local UIS2 = game:GetService("UserInputService")
+	UIS2.InputBegan:Connect(function(input, gp)
+		if gp then return end
+		if not xyFlyEnabled then return end
+		if input.KeyCode == Enum.KeyCode.W then xyFlyMove("W")
+		elseif input.KeyCode == Enum.KeyCode.S then xyFlyMove("S")
+		elseif input.KeyCode == Enum.KeyCode.A then xyFlyMove("A")
+		elseif input.KeyCode == Enum.KeyCode.D then xyFlyMove("D")
+		elseif input.KeyCode == Enum.KeyCode.Space then xyFlyMove("up")
+		elseif input.KeyCode == Enum.KeyCode.LeftControl then xyFlyMove("down")
+		end
+	end)
+
+	-- 穿墙
+	local function xyApplyNoclip()
+		if not xyNoclipEnabled then return end
+		local char = localPlayer3.Character
+		if not char then return end
+		for _, part in ipairs(char:GetDescendants()) do
+			if part:IsA("BasePart") then part.CanCollide = false end
+		end
+	end
+
+	RunService.RenderStepped:Connect(function()
+		if xyNoclipEnabled then xyApplyNoclip() end
+	end)
+
+	-- 移速
+	RunService.Heartbeat:Connect(function(dt)
+		if not xySpeedEnabled then return end
+		local char = localPlayer3.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		if hum and root and hum.MoveDirection.Magnitude > 0 then
+			root.CFrame = root.CFrame + hum.MoveDirection * xySpeedValue * dt
+		end
+	end)
+
+	-- 交互修改
+	local function xyScanPrompts()
+		if not xyInteractEnabled then return end
+		for _, obj in ipairs(Workspace:GetDescendants()) do
+			if obj:IsA("ProximityPrompt") then
+				obj.HoldDuration = xyHoldTime
+				obj.MaxActivationDistance = xyDistance
+			end
+		end
+	end
+
+	Workspace.DescendantAdded:Connect(function(obj)
+		task.wait(0.1)
+		if obj:IsA("ProximityPrompt") and xyInteractEnabled then
+			obj.HoldDuration = xyHoldTime
+			obj.MaxActivationDistance = xyDistance
+		end
+	end)
+
+	-- 传送
+	local TELEPORTS = {
+		{ n = "车辆经销商", p = Vector3.new(3719.9501953125, 3.018573522567749, -333.3118591308594) },
+		{ n = "医院", p = Vector3.new(3980.091064453125, 2.876060724258423, -138.79454040527344) },
+		{ n = "警察局", p = Vector3.new(3364.273193359375, 3.9188079834, -394.7233581542969) },
+		{ n = "圣奥里修车店", p = Vector3.new(2782.46875, 2.630995750427246, -418.59930419921875) },
+		{ n = "圣奥里银行", p = Vector3.new(3134.05419921875, 6.116048336029053, -171.36976623535156) },
+		{ n = "圣奥里服装店", p = Vector3.new(3617.91259765625, 3.1072206497192383, -452.8206481933594) },
+		{ n = "圣奥里平民重生", p = Vector3.new(3741.114990234375, 3.720573663711548, -438.1059875488281) },
+		{ n = "圣奥里码头", p = Vector3.new(4527.65625, -23.968238830566406, -280.59356689453125) },
+		{ n = "圣奥里餐饮店", p = Vector3.new(3182.416748046875, 3.01859188079834, 426.5179138183594) },
+		{ n = "消防部门", p = Vector3.new(3578.676025390625, 8.408823013305664, 579.6567993164062) },
+		{ n = "宠物店", p = Vector3.new(3678.237305, 3.017920, 693.114624) },
+		{ n = "圣奥里大码头", p = Vector3.new(2736.307617, 2.630299, -1120.333008) },
+		{ n = "海滩桥下(消星)", p = Vector3.new(3964.504395, -25.068211, -854.057251) },
+		{ n = "大景超市", p = Vector3.new(3936.582764, 3.038293, 1136.326416) },
+		{ n = "转镜中心", p = Vector3.new(4152.919922, 2.631675, 941.446045) },
+		{ n = "道路服务", p = Vector3.new(4271.332520, 2.628108, 1200.086914) },
+		{ n = "大景餐饮店", p = Vector3.new(4476.997559, 3.037825, 906.802979) },
+		{ n = "送货中心", p = Vector3.new(4399.419434, 3.038999, 1609.455933) },
+		{ n = "大景卖车店", p = Vector3.new(3434.377441, 42.931786, 2687.997070) },
+		{ n = "莱斯维尔餐饮店", p = Vector3.new(753.757812, 3.039824, 998.132996) },
+		{ n = "莱斯维尔服装店", p = Vector3.new(820.745117, 2.766988, 1047.445679) },
+		{ n = "莱斯维尔自由广场", p = Vector3.new(926.523376, 2.630995, 865.764771) },
+		{ n = "莱斯维尔码头(游艇)", p = Vector3.new(947.840210, -22.529087, 1216.085693) },
+		{ n = "米尔顿左上加油站", p = Vector3.new(1145.635742, 2.630916, -864.273682) },
+		{ n = "米尔顿右下加油站", p = Vector3.new(-1646.802734, 2.630164, 1812.894653) },
+		{ n = "米尔顿上方加油站", p = Vector3.new(-900.701660, 2.630927, 1124.683105) },
+		{ n = "米尔顿居民区", p = Vector3.new(-528.565552, 2.630996, 1331.981689) },
+		{ n = "约克镇小银行", p = Vector3.new(-668.217224, 2.630995, -65.347839) },
+		{ n = "约克镇修车厂", p = Vector3.new(-407.163025, 3.076807, -6.098211) },
+		{ n = "约克镇枪店", p = Vector3.new(-323.869293, 3.037825, 37.149670) },
+		{ n = "约克镇重生点", p = Vector3.new(-219.560318, 3.039824, -85.725433) },
+		{ n = "约克镇当铺", p = Vector3.new(-168.513733, 3.039000, -106.926529) },
+		{ n = "约克镇卫星车", p = Vector3.new(-302.093567, 3.037825, -167.621017) },
+		{ n = "约克镇中心点", p = Vector3.new(-275.995209, 2.630996, -139.985352) },
+		{ n = "黑市", p = Vector3.new(1038.969849, -22.732950, 895.430237) },
+		{ n = "渔夫码头", p = Vector3.new(-50.147552, -24.555279, 1462.145996) },
+		{ n = "农场", p = Vector3.new(-1268.339233, 2.572412, 2560.060303) },
+		{ n = "监狱门口", p = Vector3.new(-1697.931885, 2.630666, 1284.567383) },
+		{ n = "监狱广场", p = Vector3.new(-1600.602417, 2.631028, 1268.060059) },
+		{ n = "代尔山", p = Vector3.new(847.062988, 194.115753, -326.212708) },
+		{ n = "瀑布洞穴(消星)", p = Vector3.new(3040.956055, 109.688538, 2711.069336) },
+		{ n = "大桥", p = Vector3.new(949.014954, 25.215754, 2897.654785) },
+		{ n = "地图右下(消星)", p = Vector3.new(-1651.385010, 2.414712, 3225.278320) },
+		{ n = "下部加油站", p = Vector3.new(2270.378174, 2.630927, 154.161484) },
+		{ n = "游戏厅", p = Vector3.new(2934.893799, 2.956458, 1693.660034) },
+		{ n = "高尔夫", p = Vector3.new(2280.767090, 3.037836, 1982.357300) },
+		{ n = "修船厂", p = Vector3.new(4096.405273, -30.401447, 2865.045166) },
+	}
+
+	local function xyTeleportTo(pos)
+		local char = localPlayer3.Character
+		if not char then return end
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+		pcall(function() root.CFrame = CFrame.new(pos) end)
+	end
+
+	local function xyFindTeleport(name)
+		for _, data in ipairs(TELEPORTS) do
+			if data.n == name then return data end
+		end
+		return nil
+	end
+
+	localPlayer3.Chatted:Connect(function(msg)
+		if msg:sub(1, 4) == "/tp " then
+			local name = msg:sub(5)
+			local data = xyFindTeleport(name)
+			if data then
+				xyTeleportTo(data.p)
+			end
+		end
+	end)
+
 	fn59 = nil
 
 	fn59 = function()
@@ -2870,1052 +3097,512 @@ local PYHubEntry = function(loaderUrl, nodeUrl, scriptId, scriptVersion, _unused
 	v27 = nil
 	end
 
-	v27 = lib:CreateWindow({
-	Title = "小亦/圣奥里",
-	Icon = "zap",
-	IconTransparency = 0.5,
-	IconThemed = true,
-	Author = "Xi.Team",
-	Folder = "PYHub",
-	Size = UDim2.fromOffset(640, 460),
-	Transparent = true,
-	Theme = "Dark",
-	User = {
-	Enabled = false,
-	Callback = function()
-	end,
-	Anonymous = false,
-	},
-	SideBarWidth = 200,
-	ScrollBarEnabled = true,
-	Background = fn42(),
-	BackgroundImageTransparency = 0.4,
-	})
+	-- ====== 自定义 UI ======
+	local Players = game:GetService("Players")
+	local player2 = Players.LocalPlayer
+	local playerGui = player2:WaitForChild("PlayerGui")
 
+	local old = playerGui:FindFirstChild("XiaoYiUI")
+	if old then old:Destroy() end
+
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "XiaoYiUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = playerGui
+
+	v27 = screenGui
 	flag8 = true
-	local parent = v27.Parent
 
-	if parent then
-	local function cloneFunc4(descendant)
-	if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
-	if descendant.Font ~= Enum.Font.Code then
-	descendant.Font = Enum.Font.PermanentMarker
-	end
-	end
+	local main = Instance.new("Frame")
+	main.Size = UDim2.fromOffset(580, 400)
+	main.Position = UDim2.new(0.5, -290, 0.5, -200)
+	main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	main.BorderSizePixel = 0
+	main.Active = true
+	main.Draggable = true
+	main.Parent = screenGui
+
+	local mainCorner = Instance.new("UICorner")
+	mainCorner.CornerRadius = UDim.new(0, 12)
+	mainCorner.Parent = main
+
+	local mainStroke = Instance.new("UIStroke")
+	mainStroke.Color = Color3.fromRGB(0, 200, 130)
+	mainStroke.Thickness = 2
+	mainStroke.Parent = main
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, 0, 0, 40)
+	title.BackgroundTransparency = 1
+	title.Text = "小亦脚本"
+	title.TextColor3 = Color3.fromRGB(0, 255, 170)
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = 22
+	title.Parent = main
+
+	local close = Instance.new("TextButton")
+	close.Size = UDim2.fromOffset(30, 30)
+	close.Position = UDim2.new(1, -38, 0, 8)
+	close.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	close.Text = "X"
+	close.TextColor3 = Color3.fromRGB(255, 255, 255)
+	close.Font = Enum.Font.GothamBold
+	close.Parent = main
+	local closeCorner = Instance.new("UICorner")
+	closeCorner.CornerRadius = UDim.new(0, 8)
+	closeCorner.Parent = close
+
+	local sidebar = Instance.new("Frame")
+	sidebar.Size = UDim2.new(0, 130, 1, -50)
+	sidebar.Position = UDim2.new(0, 0, 0, 50)
+	sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+	sidebar.BorderSizePixel = 0
+	sidebar.Parent = main
+	local sbCorner = Instance.new("UICorner")
+	sbCorner.CornerRadius = UDim.new(0, 8)
+	sbCorner.Parent = sidebar
+
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.Size = UDim2.new(1, -140, 1, -60)
+	scrollFrame.Position = UDim2.new(0, 135, 0, 50)
+	scrollFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	scrollFrame.BorderSizePixel = 0
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scrollFrame.ScrollBarThickness = 4
+	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scrollFrame.Parent = main
+	local sfCorner = Instance.new("UICorner")
+	sfCorner.CornerRadius = UDim.new(0, 8)
+	sfCorner.Parent = scrollFrame
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding = UDim.new(0, 4)
+	listLayout.Parent = scrollFrame
+
+	local pages = {}
+	local buttons = {}
+	local yCounter = { v = 0 }
+
+	local function createPage(name, order)
+		local page = Instance.new("Frame")
+		page.Name = name .. "Page"
+		page.Size = UDim2.new(1, -10, 0, 0)
+		page.AutomaticSize = Enum.AutomaticSize.Y
+		page.BackgroundTransparency = 1
+		page.Visible = false
+		page.Parent = scrollFrame
+		local pl = Instance.new("UIListLayout")
+		pl.Padding = UDim.new(0, 3)
+		pl.Parent = page
+		pages[name] = page
+
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, -10, 0, 30)
+		btn.Position = UDim2.new(0, 5, 0, 5 + (order - 1) * 34)
+		btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		btn.Text = name
+		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 13
+		btn.Parent = sidebar
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = btn
+
+		btn.MouseButton1Click:Connect(function()
+			for _, p in pairs(pages) do p.Visible = false end
+			for _, b in pairs(buttons) do b.BackgroundColor3 = Color3.fromRGB(30, 30, 30) end
+			page.Visible = true
+			btn.BackgroundColor3 = Color3.fromRGB(0, 120, 90)
+		end)
+
+		buttons[name] = btn
+		return page
 	end
 
-	for _, descendant in ipairs(parent:GetDescendants()) do
-	cloneFunc4(descendant)
+	local function makeLabel(parent, text)
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1, -10, 0, 24)
+		label.BackgroundTransparency = 1
+		label.Text = text
+		label.TextColor3 = Color3.fromRGB(180, 180, 180)
+		label.Font = Enum.Font.Gotham
+		label.TextSize = 12
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Parent = parent
+		return label
 	end
 
-	parent.DescendantAdded:Connect(cloneFunc4)
+	local function makeToggle(parent, text, default, callback)
+		local state = default or false
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, -10, 0, 28)
+		btn.BackgroundColor3 = state and Color3.fromRGB(0, 120, 90) or Color3.fromRGB(40, 40, 40)
+		btn.Text = text .. ": " .. (state and "开" or "关")
+		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 12
+		btn.Parent = parent
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 6)
+		c.Parent = btn
+		btn.MouseButton1Click:Connect(function()
+			state = not state
+			btn.Text = text .. ": " .. (state and "开" or "关")
+			btn.BackgroundColor3 = state and Color3.fromRGB(0, 120, 90) or Color3.fromRGB(40, 40, 40)
+			pcall(callback, state)
+		end)
+		return btn
 	end
 
-	local v32 = v27:Tag({ Title = "当前时间: 00:00:00", Icon = "clock", Color = Color3.fromHex("#FFFFFF"), Border = true })
-	local n11 = 0
-
-	RunService.Heartbeat:Connect(function()
-	if tick() - n11 >= 0.1 then
-	v32:SetTitle("当前时间: " .. os.date("!%H:%M:%S", os.time() + 28800))
-	n11 = tick()
+	local function makeSlider(parent, text, min, max, default, step, callback)
+		local val = default
+		local holder = Instance.new("Frame")
+		holder.Size = UDim2.new(1, -10, 0, 28)
+		holder.BackgroundTransparency = 1
+		holder.Parent = parent
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(0.55, 0, 1, 0)
+		label.BackgroundTransparency = 1
+		label.Text = text .. ": " .. tostring(val)
+		label.TextColor3 = Color3.fromRGB(255, 255, 255)
+		label.Font = Enum.Font.Gotham
+		label.TextSize = 11
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Parent = holder
+		local btnMinus = Instance.new("TextButton")
+		btnMinus.Size = UDim2.fromOffset(24, 22)
+		btnMinus.Position = UDim2.new(0.57, 0, 0, 3)
+		btnMinus.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		btnMinus.Text = "-"
+		btnMinus.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btnMinus.Font = Enum.Font.GothamBold
+		btnMinus.Parent = holder
+		local btnPlus = Instance.new("TextButton")
+		btnPlus.Size = UDim2.fromOffset(24, 22)
+		btnPlus.Position = UDim2.new(0.72, 0, 0, 3)
+		btnPlus.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		btnPlus.Text = "+"
+		btnPlus.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btnPlus.Font = Enum.Font.GothamBold
+		btnPlus.Parent = holder
+		local function update()
+			label.Text = text .. ": " .. tostring(math.floor(val * 100) / 100)
+			pcall(callback, val)
+		end
+		btnMinus.MouseButton1Click:Connect(function()
+			val = math.max(min, val - step)
+			update()
+		end)
+		btnPlus.MouseButton1Click:Connect(function()
+			val = math.min(max, val + step)
+			update()
+		end)
+		return holder
 	end
+
+	local function makeDropdown(parent, text, values, default, callback)
+		local idx = 1
+		for i, v in ipairs(values) do
+			if v == default then idx = i break end
+		end
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, -10, 0, 28)
+		btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		btn.Text = text .. ": " .. values[idx]
+		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 11
+		btn.Parent = parent
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 6)
+		c.Parent = btn
+		btn.MouseButton1Click:Connect(function()
+			idx = idx % #values + 1
+			btn.Text = text .. ": " .. values[idx]
+			pcall(callback, values[idx])
+		end)
+		return btn
+	end
+
+	-- ====== 页面 ======
+	local pHome = createPage("主页", 1)
+	local pFunc = createPage("主要功能", 2)
+	local pMoney = createPage("刷钱", 3)
+	local pCombat = createPage("战斗", 4)
+	local pAimbot = createPage("自瞄", 5)
+	local pPlayer = createPage("玩家", 6)
+	local pESP = createPage("ESP", 7)
+	local pSet = createPage("设置", 8)
+	local pTP = createPage("传送", 9)
+
+	pHome.Visible = true
+	buttons["主页"].BackgroundColor3 = Color3.fromRGB(0, 120, 90)
+
+	makeLabel(pHome, "小亦脚本")
+	makeLabel(pHome, "作者: 小亦")
+	makeLabel(pHome, "服务器ID: " .. game.PlaceId)
+	makeLabel(pHome, "按 RightShift 切换显示")
+	-- ====== 主要功能 ======
+	makeToggle(pFunc, "无限体力", false, function(s) Settings.stamina = s end)
+	makeToggle(pFunc, "无限饥饿", false, function(s) Settings.food = s end)
+	makeToggle(pFunc, "战斗拦截", false, fn45)
+	makeToggle(pFunc, "隐身", false, fn46)
+	makeToggle(pFunc, "显示隐身悬浮窗", false, function(s) flag10 = s end)
+	makeToggle(pFunc, "锁定隐身悬浮窗位置", false, function(s)
+		flag9 = s
+		if textButton then
+			textButton.Active = not s
+			textButton.Draggable = not s
+		end
+	end)
+	makeToggle(pFunc, "防布娃娃", false, function(s) Settings.noRagdoll = s end)
+	makeToggle(pFunc, "防摔伤", false, function(s) Settings.noFallDamage = s end)
+	makeToggle(pFunc, "防越狱拉回", false, fn49)
+	makeToggle(pFunc, "自动捡钱", false, function(s) Settings.autoMoney = s end)
+	makeToggle(pFunc, "无限子弹", false, function(s) Settings.infiniteAmmo = s end)
+	makeToggle(pFunc, "快速射击", false, function(s) Settings.rapidFire = s end)
+
+	-- ====== 刷钱 ======
+	makeToggle(pMoney, "自动接取任务", false, function(s) Settings.autoMission = s end)
+	makeToggle(pMoney, "优先高收益任务", false, function(s) tbl10.priorityHighReward = s end)
+	makeSlider(pMoney, "接取间隔", 0.5, 10, 2, 0.5, function(v) tbl10.missionInterval = v end)
+	makeToggle(pMoney, "安全模式(出租车)", false, function(s)
+		tbl10.taxiSafe = s
+		if s then
+			local _, _, v44 = fn40(localPlayer3)
+			if v44 then tbl10.taxiOrigin = v44.Position end
+		end
+	end)
+	makeDropdown(pMoney, "出租车延迟模式", { "随机时间", "距离测算" }, "随机时间", function(v) tbl10.taxiDelayMode = v end)
+	makeToggle(pMoney, "出租车刷钱", false, function(s) Settings.taxi = s end)
+	makeToggle(pMoney, "公交车刷钱", false, function(s) Settings.bus = s end)
+	makeToggle(pMoney, "农民刷钱", false, function(s) Settings.farmer = s end)
+	makeToggle(pMoney, "自动黑客小游戏", false, fn50)
+	makeToggle(pMoney, "高尔夫刷钱", false, function(s) Settings.golf = s end)
+
+	-- ====== 战斗 ======
+	makeToggle(pCombat, "杀戮光环", false, function(s) tbl11.auraEnabled = s end)
+	makeToggle(pCombat, "只攻击警察", false, function(s)
+		tbl11.auraOnlyPolice = s
+		if s then tbl11.auraOnlyCivilian = false end
+	end)
+	makeToggle(pCombat, "只攻击平民", false, function(s)
+		tbl11.auraOnlyCivilian = s
+		if s then tbl11.auraOnlyPolice = false end
+	end)
+	makeToggle(pCombat, "战斗检测", false, function(s) tbl11.auraCombatCheck = s end)
+	makeSlider(pCombat, "攻击范围", 10, 500, 50, 5, function(v) tbl11.auraRange = v end)
+	makeSlider(pCombat, "伤害倍率", 1, 100, 5, 1, function(v) tbl11.auraDamage = v end)
+
+	-- Ragebot
+	makeToggle(pCombat, "Ragebot", false, function(s) tbl13.enabled = s end)
+	makeSlider(pCombat, "Ragebot攻击距离", 10, 500, 150, 1, function(v) tbl13.range = v end)
+	makeSlider(pCombat, "Ragebot攻击间隔", 0.01, 1, 0.05, 0.01, function(v) tbl13.interval = v end)
+	makeDropdown(pCombat, "Ragebot攻击部位", { "头部", "躯干", "左臂", "右臂", "左腿", "右腿" }, "头部", function(v) tbl13.bodyPart = tbl14[v] or "Head" end)
+	makeToggle(pCombat, "Ragebot职业检测", false, function(s) tbl13.jobCheck = s end)
+	makeToggle(pCombat, "Ragebot墙壁检测", false, function(s) tbl13.wallCheck = s end)
+	makeToggle(pCombat, "Ragebot活体检测", false, function(s) tbl13.aliveCheck = s end)
+	makeToggle(pCombat, "Ragebot战斗检测", false, function(s) tbl13.combatCheck = s end)
+	makeToggle(pCombat, "Ragebot锁定警察", false, function(s)
+		tbl13.policeLock = s
+		if s then tbl13.civilianLock = false end
+	end)
+	makeToggle(pCombat, "Ragebot锁定平民", false, function(s)
+		tbl13.civilianLock = s
+		if s then tbl13.policeLock = false end
+	end)
+	makeToggle(pCombat, "Ragebot弹道显示", false, function(s) tbl13.beam = s end)
+
+	-- ====== 自瞄 ======
+	makeToggle(pAimbot, "开启/关闭自瞄", false, function(s) tbl12.enabled = s end)
+	makeToggle(pAimbot, "显示Fov圈", false, function(s) tbl12.showFov = s end)
+	makeToggle(pAimbot, "显示准心", false, function(s) tbl12.showCrosshair = s end)
+	makeToggle(pAimbot, "显示追踪线", false, function(s) tbl12.showTracer = s end)
+	makeToggle(pAimbot, "队伍检测", false, function(s) tbl12.teamCheck = s end)
+	makeToggle(pAimbot, "好友检测", false, function(s) tbl12.friendCheck = s end)
+	makeToggle(pAimbot, "墙壁检测", false, function(s) tbl12.wallCheck = s end)
+	makeToggle(pAimbot, "预判自瞄", false, function(s) tbl12.prediction = s end)
+	makeToggle(pAimbot, "只自瞄警察", false, function(s)
+		tbl12.onlyPolice = s
+		if s then tbl12.onlyCivilian = false end
+	end)
+	makeToggle(pAimbot, "只自瞄平民", false, function(s)
+		tbl12.onlyCivilian = s
+		if s then tbl12.onlyPolice = false end
+	end)
+	makeToggle(pAimbot, "自瞄战斗检测", false, function(s) tbl12.combatCheck = s end)
+	makeDropdown(pAimbot, "优先锁定模式", { "准心最近", "距离最近", "血量最低" }, "准心最近", function(v) tbl12.targetMode = v end)
+	makeDropdown(pAimbot, "瞄准身体部位", { "头", "胸", "左手", "右手", "左腿", "右腿" }, "头", function(v) tbl12.targetPart = v end)
+	makeSlider(pAimbot, "Fov圈大小", 1, 500, 50, 1, function(v) tbl12.fov = v end)
+	makeSlider(pAimbot, "自瞄平滑度", 1, 10, 10, 1, function(v) tbl12.smoothness = v / 10 end)
+	makeSlider(pAimbot, "Fov圈厚度", 1, 5, 2, 1, function(v) tbl12.fovThickness = v end)
+	makeDropdown(pAimbot, "颜色选择", { "红色", "黄色", "绿色", "蓝色", "紫色", "白色", "黑色", "彩虹色" }, "红色", function(v) tbl12.color = v end)
+
+	-- ====== 范围 ======
+	makeToggle(pCombat, "开启/关闭范围", false, function(s) tbl15.active = s end)
+	makeSlider(pCombat, "范围大小", 1, 100, 10, 1, function(v) tbl15.size = v end)
+	makeSlider(pCombat, "范围透明度", 0, 1, 0.7, 0.05, function(v) tbl15.transparency = v end)
+	makeDropdown(pCombat, "范围颜色", { "红色", "蓝色", "黄色", "绿色", "青色", "橙色", "紫色", "白色", "黑色", "彩虹色" }, "红色", function(v) tbl15.color = v tbl15.rainbow = v == "彩虹色" end)
+	makeDropdown(pCombat, "范围材质", { "Neon", "Plastic", "Wood", "Slate", "Concrete", "Metal", "SmoothPlastic" }, "Neon", function(v) tbl15.material = v end)
+	makeToggle(pCombat, "NPC范围", false, function(s) tbl15.affectNPC = s end)
+	makeToggle(pCombat, "范围队伍检测", false, function(s) tbl15.teamCheck = s end)
+	makeToggle(pCombat, "范围活体检测", false, function(s) tbl15.checkCorpses = s end)
+	makeToggle(pCombat, "显示轮廓", false, function(s) tbl15.outline = s end)
+	makeToggle(pCombat, "启用/禁用碰撞", false, function(s) tbl15.collision = s end)
+	makeToggle(pCombat, "发光效果", false, function(s) tbl15.glow = s end)
+	makeToggle(pCombat, "脉动效果", false, function(s) tbl15.pulse = s end)
+
+	-- ====== 玩家 ======
+	makeToggle(pPlayer, "开启/关闭跳跃", false, function(s)
+		MovementSettings.jumpEnabled = s
+		if s then fn56() else fn55() end
+	end)
+	makeSlider(pPlayer, "跳跃高度", 1, 100, 50, 1, function(v) MovementSettings.jumpHeight = v end)
+	makeSlider(pPlayer, "跳跃倍数", 1, 10, 1, 0.5, function(v) MovementSettings.jumpMultiplier = v end)
+	makeToggle(pPlayer, "无限跳跃", false, function(s) MovementSettings.infiniteJump = s end)
+
+	-- 警察功能
+	makeToggle(pPlayer, "自动铐", false, function(s)
+		Settings.autoCuff = s
+		if s then fn54() end
+	end)
+	makeToggle(pPlayer, "自动传送", false, function(s) PoliceSettings.teleport = s end)
+	makeToggle(pPlayer, "警察战斗检测", false, function(s) PoliceSettings.combatCheck = s end)
+	makeSlider(pPlayer, "警察范围", 10, 500, 200, 5, function(v) PoliceSettings.range = v end)
+	makeSlider(pPlayer, "警察间隔", 0.1, 3, 0.5, 0.1, function(v) PoliceSettings.delay = v end)
+
+	-- 小亦人物功能
+	makeToggle(pPlayer, "小亦飞行", false, function(s)
+		if s then xyStartFly() else xyStopFly() end
+	end)
+	makeSlider(pPlayer, "飞行速度", 10, 200, 50, 5, function(v) xyFlySpeed = v end)
+	makeToggle(pPlayer, "穿墙", false, function(s) xyNoclipEnabled = s end)
+	makeToggle(pPlayer, "移速", false, function(s) xySpeedEnabled = s end)
+	makeSlider(pPlayer, "移速值", 5, 100, 20, 1, function(v) xySpeedValue = v end)
+	makeToggle(pPlayer, "伤害免疫", false, function(s) xyGodEnabled = s end)
+	makeToggle(pPlayer, "交互修改", false, function(s)
+		xyInteractEnabled = s
+		if s then xyScanPrompts() end
+	end)
+	makeSlider(pPlayer, "交互距离", 5, 100, 25, 1, function(v) xyDistance = v end)
+	makeToggle(pPlayer, "小亦无限体力", false, function(s) xyStaminaEnabled = s end)
+
+	-- ====== ESP ======
+	makeToggle(pESP, "玩家透视总开关", false, function(s)
+		tbl16.enabled = s
+		if not s then
+			for k2 in pairs(tbl16.trackers) do fn52(k2) end
+		else
+			pcall(fn53)
+		end
+	end)
+	makeToggle(pESP, "显示名字", true, function(s) tbl16.name = s end)
+	makeToggle(pESP, "显示距离", true, function(s) tbl16.distance = s end)
+	makeToggle(pESP, "显示血量", true, function(s) tbl16.health = s end)
+	makeToggle(pESP, "显示高亮", true, function(s) tbl16.highlight = s end)
+	makeToggle(pESP, "显示追踪线", false, function(s) tbl16.tracer = s end)
+	makeDropdown(pESP, "追踪线起点", { "屏幕底部", "屏幕中心", "屏幕顶部" }, "屏幕底部", function(v) tbl16.tracerOrigin = v end)
+	makeToggle(pESP, "透视警察", false, function(s)
+		for k2 in pairs(tbl16.selectedTeams) do tbl16.selectedTeams[k2] = false end
+		for k2, v50 in pairs(tbl17) do
+			if v50 == "警察" or k2 == "警察" then tbl16.selectedTeams[k2] = s end
+		end
+	end)
+	makeToggle(pESP, "透视平民", false, function(s)
+		for k2, v50 in pairs(tbl17) do
+			if v50 == "平民" or k2 == "平民" then tbl16.selectedTeams[k2] = s end
+		end
+	end)
+	makeToggle(pESP, "透视逃犯", false, function(s) tbl16.showFugitive = s end)
+
+	-- ====== 设置 ======
+	makeLabel(pSet, "界面设置")
+	makeToggle(pSet, "显示边框", false, function(s)
+		mainStroke.Enabled = s
+	end)
+	makeDropdown(pSet, "边框颜色", { "绿色", "红色", "蓝色", "黄色", "紫色", "白色" }, "绿色", function(v)
+		local colors = {
+			["绿色"] = Color3.fromRGB(0, 200, 130),
+			["红色"] = Color3.fromRGB(255, 60, 60),
+			["蓝色"] = Color3.fromRGB(60, 120, 255),
+			["黄色"] = Color3.fromRGB(255, 220, 60),
+			["紫色"] = Color3.fromRGB(170, 80, 255),
+			["白色"] = Color3.fromRGB(255, 255, 255),
+		}
+		mainStroke.Color = colors[v] or colors["绿色"]
 	end)
 
-	local editOpenButton = v27.EditOpenButton
-	local v33 = v27
-
-	local tbl29 = {
-	Title = "PYHub<font color='#00FF00'>1.0</font>",
-	Icon = "crown",
-	CornerRadius = UDim.new(1, 16),
-	StrokeThickness = 1.5,
-	}
-
-	local colorSequence = ColorSequence.new
-	local tbl30 = {}
-	local v34 = ColorSequenceKeypoint.new(0, Color3.fromHex("FF1493"))
-	local v35 = ColorSequenceKeypoint.new(0.3, Color3.fromHex("FF69B4"))
-	local v36 = ColorSequenceKeypoint.new(0.6, Color3.fromHex("FFB6C1"))
-	local new = ColorSequenceKeypoint.new
-	local color = Color3.fromHex
-	tbl30[1] = v34
-	tbl30[2] = v35
-	tbl30[3] = v36
-
-	do
-	local values = table.pack(new(1, color("FFC0CB")))
-	table.move(values, 1, values.n, 4, tbl30)
-	end
-
-	tbl29.Color = colorSequence(tbl30)
-	tbl29.Draggable = true
-	editOpenButton(v33, tbl29)
-	local main = v27.UIElements.Main
-
-	if main then
-	local uiStroke = Instance.new("UIStroke")
-	uiStroke.Name = "MainBorder"
-	uiStroke.Thickness = 3
-	uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	uiStroke.LineJoinMode = Enum.LineJoinMode.Round
-	uiStroke.Enabled = tbl8.borderEnabled
-	uiStroke.Parent = main
-	local uiGradient = Instance.new("UIGradient")
-	uiGradient.Name = "BorderGradient"
-	uiGradient.Parent = uiStroke
-	end
-
-	local v36 = v27:Tab({ Title = "公告", Icon = "message-circle", Locked = false })
-	v36:Paragraph({ Title = "小亦", Desc = "感谢使用小亦付费脚本", Image = "message-circle", ImageSize = 32 })
-	v36:Paragraph({ Title = "作者", Desc = "小亦", Image = "user", ImageSize = 32 })
-	local v37 = v27:Tab({ Title = "主页", Icon = "home", Locked = false })
-	v37:Paragraph({ Title = "小亦", Desc = "圣奥里精简版", Image = "zap", ImageSize = 32 })
-	v37:Paragraph({ Title = "玩家", Desc = "当前服务器ID: " .. game.PlaceId, Image = "users", ImageSize = 32 })
-	local v38 = v27:Tab({ Title = "UI设置", Icon = "settings", Locked = false })
-
-	v38:Toggle({
-	Title = "自定义光标",
-	Value = false,
-	Callback = function(arg11)
-	v27:ToggleCustomCursor(arg11)
-	end,
-	})
-
-	v38:Dropdown({
-	Title = "通知位置",
-	Values = { "左", "右" },
-	Value = "右",
-	Callback = function(arg11)
-	lib:SetNotifySide(arg11 == "左" and "Left" or "Right")
-	end,
-	})
-
-	v38:Dropdown({
-	Title = "DPI缩放",
-	Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
-	Value = "100%",
-	Callback = function(arg11)
-	local num = tonumber(arg11:gsub("%%", ""))
-
-	if num then
-	v27:SetDPIScale(num / 100)
-	end
-	end,
-	})
-
-	v38:Keybind({
-	Title = "菜单按键",
-	Value = "RightShift",
-	Callback = function(arg11)
-	v27:SetToggleKey(Enum.KeyCode[arg11])
-	end,
-	})
-
-	v38:Divider()
-
-	v38:Toggle({
-	Title = "随机背景图",
-	Value = tbl8.randomBg,
-	Callback = function(randomBg)
-	tbl8.randomBg = randomBg
-	end,
-	})
-
-	v38:Divider()
-
-	v38:Toggle({
-	Title = "启用边框颜色",
-	Value = tbl8.borderEnabled,
-	Callback = function(borderEnabled)
-	tbl8.borderEnabled = borderEnabled
-	local main2 = v27 and v27.UIElements and v27.UIElements.Main
-	main2 = main2 and main2:FindFirstChild("MainBorder")
-
-	if main2 then
-	main2.Enabled = borderEnabled
-	end
-	end,
-	})
-
-	v38:Dropdown({
-	Title = "边框颜色",
-	Values = { "旋转彩虹", "默认白色", "红色", "橙色", "黄色", "绿色", "青色", "蓝色", "紫色", "粉色" },
-	Value = tbl8.isBorderRainbow and "旋转彩虹" or "默认白色",
-	Callback = function(arg11)
-	if arg11 == "旋转彩虹" then
-	elseif arg11 == "默认白色" then
-	fn43(Color3.new(1, 1, 1), false)
-	else
-	fn43(fn39(arg11), false)
-	end
-	end,
-	})
-
-	v38:Divider()
-
-	v38:Dropdown({
-	Title = "文字颜色",
-	Values = { "默认", "青色", "粉色", "紫色", "橙色", "红色", "绿色", "蓝色", "黄色", "白色", "彩虹" },
-	Value = "默认",
-	Callback = function(arg11)
-	v28 = arg11
-	end,
-	})
-
-	v38:Button({
-	Title = "确认应用文字颜色",
-	Icon = "check",
-	Callback = function()
-	local v39 = lib.GetThemes()
-	if not v39 or not v39.Dark then
-	return
-	end
-
-	if connection then
-	connection:Disconnect()
-	connection = nil
-	end
-
-	if v28 == "彩虹" then
-	connection = RunService.Heartbeat:Connect(function()
-	local v40 = nil
-	v39.Dark.Text = v40
-	v39.Dark.Placeholder = v40
-	v39.Dark.Button = v40
-	v39.Dark.TabTitle = v40
-	lib:SetTheme("Dark")
-	end)
-	elseif v28 and v28 ~= "默认" then
-	local v40 = nil
-	v39.Dark.Text = v40
-	v39.Dark.Placeholder = v40
-	v39.Dark.Button = v40
-	v39.Dark.TabTitle = v40
-	lib:SetTheme("Dark")
-	else
-	lib:SetTheme("Dark")
-	end
-	end,
-	})
-
-	local v39 = v27:Section({ Title = "功能", Opened = true })
-	local v40 = v39:Tab({ Title = "主要功能", Icon = "sliders-h" })
-
-	v40:Toggle({
-	Title = "无限体力",
-	Default = false,
-	Callback = function(stamina)
-	Settings.stamina = stamina
-	end,
-	})
-
-	v40:Toggle({
-	Title = "无限饥饿",
-	Default = false,
-	Callback = function(food)
-	Settings.food = food
-	end,
-	})
-
-	v40:Toggle({ Title = "战斗拦截", Default = false, Callback = fn45 })
-	v40:Toggle({ Title = "隐身", Default = false, Callback = fn46 })
-
-	v40:Toggle({
-	Title = "显示隐身悬浮窗",
-	Default = false,
-	Callback = function(arg11)
-	flag10 = arg11
-
-	if arg11 then
-	else
-	end
-	end,
-	})
-
-	v40:Toggle({
-	Title = "锁定隐身悬浮窗位置",
-	Default = false,
-	Callback = function(arg11)
-	flag9 = arg11
-
-	if textButton then
-	local active = not arg11
-	textButton.Active = active
-	textButton.Draggable = active
-	end
-	end,
-	})
-
-	v40:Toggle({
-	Title = "防布娃娃",
-	Default = false,
-	Callback = function(noRagdoll)
-	Settings.noRagdoll = noRagdoll
-	end,
-	})
-
-	v40:Toggle({
-	Title = "防摔伤",
-	Default = false,
-	Callback = function(noFallDamage)
-	Settings.noFallDamage = noFallDamage
-	end,
-	})
-
-	v40:Toggle({ Title = "防越狱拉回", Default = false, Callback = fn49 })
-
-	v40:Toggle({
-	Title = "自动捡钱",
-	Default = false,
-	Callback = function(autoMoney)
-	Settings.autoMoney = autoMoney
-	end,
-	})
-
-	v40:Toggle({
-	Title = "无限子弹",
-	Default = false,
-	Callback = function(infiniteAmmo)
-	Settings.infiniteAmmo = infiniteAmmo
-	end,
-	})
-
-	v40:Toggle({
-	Title = "快速射击",
-	Default = false,
-	Callback = function(rapidFire)
-	Settings.rapidFire = rapidFire
-
-	if rapidFire then
-	end
-	end,
-	})
-
-	local v41 = v39:Tab({ Title = "刷钱", Icon = "money-bill-wave" })
-
-	v41:Toggle({
-	Title = "自动接取任务",
-	Default = false,
-	Callback = function(autoMission)
-	Settings.autoMission = autoMission
-	end,
-	})
-
-	v41:Toggle({
-	Title = "优先高收益任务",
-	Default = false,
-	Callback = function(priorityHighReward)
-	tbl10.priorityHighReward = priorityHighReward
-	end,
-	})
-
-	v41:Input({
-	Title = "接取间隔",
-	Value = "2",
-	PlaceholderText = "输入间隔秒数",
-	ClearTextOnFocus = false,
-	Callback = function(arg11)
-	local missionInterval = tonumber(arg11)
-
-	if missionInterval and missionInterval > 0 then
-	tbl10.missionInterval = missionInterval
-	end
-	end,
-	})
-
-	v41:Toggle({
-	Title = "安全模式(出租车)",
-	Default = false,
-	Callback = function(taxiSafe)
-	tbl10.taxiSafe = taxiSafe
-
-	if taxiSafe then
-	local _, _, v44 = fn40(localPlayer3)
-	if v44 then
-	tbl10.taxiOrigin = v44.Position
-	end
-	end
-	end,
-	})
-
-	v41:Dropdown({
-	Title = "出租车延迟模式",
-	Values = { "随机时间", "距离测算" },
-	Value = "随机时间",
-	Callback = function(taxiDelayMode)
-	tbl10.taxiDelayMode = taxiDelayMode
-	end,
-	})
-
-	v41:Toggle({
-	Title = "出租车刷钱",
-	Default = false,
-	Callback = function(taxi)
-	Settings.taxi = taxi
-	end,
-	})
-
-	v41:Toggle({
-	Title = "公交车刷钱",
-	Default = false,
-	Callback = function(bus)
-	Settings.bus = bus
-	end,
-	})
-
-	v41:Toggle({
-	Title = "农民刷钱",
-	Default = false,
-	Callback = function(farmer)
-	Settings.farmer = farmer
-	end,
-	})
-
-	v41:Toggle({ Title = "自动黑客小游戏", Default = false, Callback = fn50 })
-
-	v41:Toggle({
-	Title = "高尔夫刷钱",
-	Default = false,
-	Callback = function(golf)
-	Settings.golf = golf
-	end,
-	})
-
-	local v42 = v39:Tab({ Title = "战斗", Icon = "crosshairs" })
-
-	v42:Toggle({
-	Title = "杀戮光环",
-	Default = false,
-	Callback = function(auraEnabled)
-	tbl11.auraEnabled = auraEnabled
-	end,
-	})
-
-	v42:Toggle({
-	Title = "只攻击警察",
-	Default = false,
-	Callback = function(auraOnlyPolice)
-	tbl11.auraOnlyPolice = auraOnlyPolice
-
-	if auraOnlyPolice then
-	tbl11.auraOnlyCivilian = false
-	end
-	end,
-	})
-
-	v42:Toggle({
-	Title = "只攻击平民",
-	Default = false,
-	Callback = function(auraOnlyCivilian)
-	tbl11.auraOnlyCivilian = auraOnlyCivilian
-
-	if auraOnlyCivilian then
-	tbl11.auraOnlyPolice = false
-	end
-	end,
-	})
-
-	v42:Toggle({
-	Title = "战斗检测",
-	Default = false,
-	Callback = function(auraCombatCheck)
-	tbl11.auraCombatCheck = auraCombatCheck
-	end,
-	})
-
-	v42:Slider({
-	Title = "攻击范围",
-	Value = { Min = 10, Max = 500, Default = 50 },
-	Callback = function(auraRange)
-	tbl11.auraRange = auraRange
-	end,
-	})
-
-	v42:Slider({
-	Title = "伤害倍率",
-	Value = { Min = 1, Max = 100, Default = 5 },
-	Callback = function(auraDamage)
-	tbl11.auraDamage = auraDamage
-	end,
-	})
-
-	local v43 = v39:Tab({ Title = "自瞄", Icon = "crosshairs" })
-
-	v43:Toggle({
-	Title = "开启/关闭自瞄",
-	Default = false,
-	Callback = function(enabled)
-	tbl12.enabled = enabled
-	end,
-	})
-
-	v43:Toggle({
-	Title = "显示Fov圈",
-	Default = false,
-	Callback = function(showFov)
-	tbl12.showFov = showFov
-	end,
-	})
-
-	v43:Toggle({
-	Title = "显示准心",
-	Default = false,
-	Callback = function(showCrosshair)
-	tbl12.showCrosshair = showCrosshair
-	end,
-	})
-
-	v43:Toggle({
-	Title = "显示追踪线",
-	Default = false,
-	Callback = function(showTracer)
-	tbl12.showTracer = showTracer
-	end,
-	})
-
-	v43:Toggle({
-	Title = "队伍检测",
-	Default = false,
-	Callback = function(teamCheck)
-	tbl12.teamCheck = teamCheck
-	end,
-	})
-
-	v43:Toggle({
-	Title = "好友检测",
-	Default = false,
-	Callback = function(friendCheck)
-	tbl12.friendCheck = friendCheck
-	end,
-	})
-
-	v43:Toggle({
-	Title = "墙壁检测",
-	Default = false,
-	Callback = function(wallCheck)
-	tbl12.wallCheck = wallCheck
-	end,
-	})
-
-	v43:Toggle({
-	Title = "预判自瞄",
-	Default = false,
-	Callback = function(prediction)
-	tbl12.prediction = prediction
-	end,
-	})
-
-	v43:Toggle({
-	Title = "只自瞄警察",
-	Default = false,
-	Callback = function(onlyPolice)
-	tbl12.onlyPolice = onlyPolice
-
-	if onlyPolice then
-	tbl12.onlyCivilian = false
-	end
-	end,
-	})
-
-	v43:Toggle({
-	Title = "只自瞄平民",
-	Default = false,
-	Callback = function(onlyCivilian)
-	tbl12.onlyCivilian = onlyCivilian
-
-	if onlyCivilian then
-	tbl12.onlyPolice = false
-	end
-	end,
-	})
-
-	v43:Toggle({
-	Title = "战斗检测",
-	Default = false,
-	Callback = function(combatCheck)
-	tbl12.combatCheck = combatCheck
-	end,
-	})
-
-	v43:Dropdown({
-	Title = "优先锁定模式",
-	Values = { "准心最近", "距离最近", "血量最低" },
-	Value = "准心最近",
-	Callback = function(targetMode)
-	tbl12.targetMode = targetMode
-	end,
-	})
-
-	v43:Dropdown({
-	Title = "瞄准身体部位",
-	Values = { "头", "胸", "左手", "右手", "左腿", "右腿" },
-	Value = "头",
-	Callback = function(targetPart)
-	tbl12.targetPart = targetPart
-	end,
-	})
-
-	v43:Slider({
-	Title = "Fov圈大小",
-	Value = { Min = 1, Max = 500, Default = 50 },
-	Callback = function(fov)
-	tbl12.fov = fov
-	end,
-	})
-
-	v43:Slider({
-	Title = "自瞄平滑度",
-	Value = { Min = 1, Max = 10, Default = 10 },
-	Callback = function(arg11)
-	tbl12.smoothness = arg11 / 10
-	end,
-	})
-
-	v43:Slider({
-	Title = "Fov圈厚度",
-	Value = { Min = 1, Max = 5, Default = 2 },
-	Callback = function(fovThickness)
-	tbl12.fovThickness = fovThickness
-	end,
-	})
-
-	v43:Dropdown({
-	Title = "颜色选择",
-	Values = { "红色", "黄色", "绿色", "蓝色", "紫色", "白色", "黑色", "彩虹色" },
-	Value = "红色",
-	Callback = function(color2)
-	tbl12.color = color2
-	end,
-	})
-
-	local v44 = v39:Tab({ Title = "Ragebot", Icon = "bot" })
-
-	v44:Toggle({
-	Title = "Ragebot",
-	Default = false,
-	Callback = function(enabled)
-	tbl13.enabled = enabled
-	end,
-	})
-
-	v44:Slider({
-	Title = "攻击距离",
-	Value = { Min = 10, Max = 500, Default = 150 },
-	Step = 1,
-	Callback = function(range)
-	tbl13.range = range
-	end,
-	})
-
-	v44:Slider({
-	Title = "攻击间隔",
-	Value = { Min = 0.01, Max = 1, Default = 0.05 },
-	Step = 0.01,
-	Callback = function(interval)
-	tbl13.interval = interval
-	end,
-	})
-
-	v44:Dropdown({
-	Title = "攻击部位",
-	Values = { "头部", "躯干", "左臂", "右臂", "左腿", "右腿" },
-	Value = "头部",
-	Callback = function(arg11)
-	tbl13.bodyPart = tbl14[arg11] or "Head"
-	end,
-	})
-
-	v44:Toggle({
-	Title = "职业检测",
-	Default = false,
-	Callback = function(jobCheck)
-	tbl13.jobCheck = jobCheck
-	end,
-	})
-
-	v44:Toggle({
-	Title = "墙壁检测",
-	Default = false,
-	Callback = function(wallCheck)
-	tbl13.wallCheck = wallCheck
-	end,
-	})
-
-	v44:Toggle({
-	Title = "活体检测",
-	Default = false,
-	Callback = function(aliveCheck)
-	tbl13.aliveCheck = aliveCheck
-	end,
-	})
-
-	v44:Toggle({
-	Title = "战斗状态检测",
-	Default = false,
-	Callback = function(combatCheck)
-	tbl13.combatCheck = combatCheck
-	end,
-	})
-
-	v44:Toggle({
-	Title = "锁定警察",
-	Default = false,
-	Callback = function(policeLock)
-	tbl13.policeLock = policeLock
-
-	if policeLock then
-	tbl13.civilianLock = false
-	end
-	end,
-	})
-
-	v44:Toggle({
-	Title = "锁定平民",
-	Default = false,
-	Callback = function(civilianLock)
-	tbl13.civilianLock = civilianLock
-
-	if civilianLock then
-	tbl13.policeLock = false
-	end
-	end,
-	})
-
-	v44:Toggle({
-	Title = "弹道显示",
-	Default = false,
-	Callback = function(beam)
-	tbl13.beam = beam
-	end,
-	})
-
-	local v45 = v39:Tab({ Title = "范围", Icon = "bullseye" })
-
-	v45:Toggle({
-	Title = "开启/关闭范围",
-	Default = false,
-	Callback = function(active)
-	tbl15.active = active
-
-	if not active then
-	for _, player in ipairs(Players:GetPlayers()) do
-	if player.Character then
-	end
-	end
-	end
-	end,
-	})
-
-	v45:Input({
-	Title = "范围大小设置",
-	Value = "10",
-	Callback = function(arg11)
-	local size = tonumber(arg11)
-
-	if size and size > 0 then
-	tbl15.size = size
-	end
-	end,
-	})
-
-	v45:Input({
-	Title = "范围透明度设置(0-1)",
-	Value = "0.7",
-	Callback = function(arg11)
-	local transparency = tonumber(arg11)
-
-	if transparency and transparency >= 0 and transparency <= 1 then
-	tbl15.transparency = transparency
-	end
-	end,
-	})
-
-	v45:Dropdown({
-	Title = "选择范围颜色",
-	Values = { "红色", "蓝色", "黄色", "绿色", "青色", "橙色", "紫色", "白色", "黑色", "彩虹色" },
-	Value = "红色",
-	Callback = function(color2)
-	tbl15.color = color2
-	tbl15.rainbow = color2 == "彩虹色"
-	end,
-	})
-
-	v45:Dropdown({
-	Title = "选择范围材质",
-	Values = { "Neon", "Plastic", "Wood", "Slate", "Concrete", "Metal", "SmoothPlastic" },
-	Value = "Neon",
-	Callback = function(material)
-	tbl15.material = material
-	end,
-	})
-
-	v45:Toggle({
-	Title = "NPC范围",
-	Default = false,
-	Callback = function(affectNPC)
-	tbl15.affectNPC = affectNPC
-	end,
-	})
-
-	v45:Toggle({
-	Title = "队伍检测",
-	Default = false,
-	Callback = function(teamCheck)
-	tbl15.teamCheck = teamCheck
-	end,
-	})
-
-	v45:Toggle({
-	Title = "活体检测",
-	Default = false,
-	Callback = function(checkCorpses)
-	tbl15.checkCorpses = checkCorpses
-	end,
-	})
-
-	v45:Toggle({
-	Title = "显示轮廓",
-	Default = false,
-	Callback = function(outline)
-	tbl15.outline = outline
-	end,
-	})
-
-	v45:Toggle({
-	Title = "启用/禁用碰撞",
-	Default = false,
-	Callback = function(collision)
-	tbl15.collision = collision
-	end,
-	})
-
-	v45:Toggle({
-	Title = "发光效果",
-	Default = false,
-	Callback = function(glow)
-	tbl15.glow = glow
-	end,
-	})
-
-	v45:Toggle({
-	Title = "脉动效果",
-	Default = false,
-	Callback = function(pulse)
-	tbl15.pulse = pulse
-	end,
-	})
-
-	local v46 = v39:Tab({ Title = "玩家", Icon = "user" })
-
-	v46:Toggle({
-	Title = "开启/关闭跳跃",
-	Default = false,
-	Callback = function(jumpEnabled)
-	MovementSettings.jumpEnabled = jumpEnabled
-
-	if jumpEnabled then
-	fn56()
-	else
-	fn55()
-	end
-	end,
-	})
-
-	v46:Slider({
-	Title = "设置跳跃高度",
-	Value = { Min = 50, Max = 400, Default = 50 },
-	Callback = function(jumpPower)
-	MovementSettings.jumpPower = jumpPower
-	end,
-	})
-
-	v46:Slider({
-	Title = "设置跳跃倍数",
-	Value = { Min = 1, Max = 10, Default = 1 },
-	Callback = function(jumpMultiplier)
-	MovementSettings.jumpMultiplier = jumpMultiplier
-	end,
-	})
-
-	v46:Toggle({
-	Title = "无限跳跃",
-	Default = false,
-	Callback = function(infiniteJump)
-	MovementSettings.infiniteJump = infiniteJump
-	end,
-	})
-
-	local v47 = v39:Tab({ Title = "警察功能", Icon = "handcuffs" })
-
-	v47:Toggle({
-	Title = "自动铐",
-	Default = false,
-	Callback = function(autoCuff)
-	Settings.autoCuff = autoCuff
-
-	if autoCuff then
-	fn54()
-	end
-	end,
-	})
-
-	v47:Toggle({
-	Title = "自动传送",
-	Default = false,
-	Callback = function(teleport)
-	PoliceSettings.teleport = teleport
-	end,
-	})
-
-	v47:Toggle({
-	Title = "战斗检测",
-	Default = false,
-	Callback = function(combatCheck)
-	PoliceSettings.combatCheck = combatCheck
-	end,
-	})
-
-	v47:Slider({
-	Title = "范围",
-	Value = { Min = 10, Max = 500, Default = 200 },
-	Step = 5,
-	Callback = function(range)
-	PoliceSettings.range = range
-	end,
-	})
-
-	v47:Slider({
-	Title = "间隔",
-	Value = { Min = 0.1, Max = 3, Default = 0.5 },
-	Step = 0.1,
-	Callback = function(delay)
-	PoliceSettings.delay = delay
-	end,
-	})
-
-	local v48 = v39:Tab({ Title = "ESP", Icon = "eye" })
-
-	v48:Toggle({
-	Title = "玩家透视总开关",
-	Default = false,
-	Callback = function(enabled)
-	if type(enabled) == "table" then
-	enabled = enabled.Value
-	end
-	tbl16.enabled = enabled == true
-
-	if not tbl16.enabled then
-	for k2 in pairs(tbl16.trackers) do
-	fn52(k2)
-	end
-	else
-	pcall(fn53)
-	end
-	end,
-	})
-
-	v48:Toggle({
-	Title = "显示名字",
-	Default = true,
-	Callback = function(name)
-	tbl16.name = name
-	end,
-	})
-
-	v48:Toggle({
-	Title = "显示距离",
-	Default = true,
-	Callback = function(distance)
-	tbl16.distance = distance
-	end,
-	})
-
-	v48:Toggle({
-	Title = "显示血量",
-	Default = true,
-	Callback = function(health)
-	tbl16.health = health
-	end,
-	})
-
-	v48:Toggle({
-	Title = "显示高亮",
-	Default = true,
-	Callback = function(highlight)
-	tbl16.highlight = highlight
-	end,
-	})
-
-	v48:Toggle({
-	Title = "显示追踪线",
-	Default = false,
-	Callback = function(tracer)
-	tbl16.tracer = tracer
-	end,
-	})
-
-	v48:Dropdown({
-	Title = "追踪线起点",
-	Values = { "屏幕底部", "屏幕中心", "屏幕顶部" },
-	Value = "屏幕底部",
-	Callback = function(tracerOrigin)
-	tbl16.tracerOrigin = tracerOrigin
-	end,
-	})
-
-	local tbl31 = { "逃犯", "厨师", "平民", "配送员", "农民", "消防员", "警察", "医护人员", "囚犯", "道路服务", "交通" }
-
-	v48:Dropdown({
-	Title = "选择透视队伍",
-	Values = tbl31,
-	Value = tbl31,
-	Multi = true,
-	AllowNone = true,
-	Callback = function(arg11)
-	for k2 in pairs(tbl16.selectedTeams) do
-	tbl16.selectedTeams[k2] = false
-	end
-	tbl16.showFugitive = false
-	if type(arg11) ~= "table" then
-	return
-	end
-	local function applyTeam(label)
-	if label == "逃犯" then
-	tbl16.showFugitive = true
-	return
-	end
-	for k2, v50 in pairs(tbl17) do
-	if v50 == label or k2 == label then
-	tbl16.selectedTeams[k2] = true
-	end
-	end
-	end
-	if arg11[1] ~= nil then
-	for _, v49 in ipairs(arg11) do
-	applyTeam(v49)
-	end
-	else
-	for k2, v49 in pairs(arg11) do
-	if v49 == true then
-	applyTeam(k2)
-	elseif type(v49) == "string" then
-	applyTeam(v49)
-	end
-	end
-	end
-	end,
-	})
-
-	v27:OnClose(function()
-	flag8 = false
-	v27 = nil
+	-- ====== 传送 ======
+	makeLabel(pTP, "输入地点名传送（聊天也可用 /tp 地点名）")
+	local tpInput = Instance.new("TextBox")
+	tpInput.Size = UDim2.new(1, -10, 0, 28)
+	tpInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	tpInput.PlaceholderText = "输入地点名"
+	tpInput.Text = ""
+	tpInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+	tpInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+	tpInput.Font = Enum.Font.Gotham
+	tpInput.TextSize = 12
+	tpInput.Parent = pTP
+	local tpCorner = Instance.new("UICorner")
+	tpCorner.CornerRadius = UDim.new(0, 6)
+	tpCorner.Parent = tpInput
+
+	local tpBtn = Instance.new("TextButton")
+	tpBtn.Size = UDim2.new(1, -10, 0, 28)
+	tpBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 90)
+	tpBtn.Text = "传送"
+	tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	tpBtn.Font = Enum.Font.GothamBold
+	tpBtn.TextSize = 13
+	tpBtn.Parent = pTP
+	local tpBtnCorner = Instance.new("UICorner")
+	tpBtnCorner.CornerRadius = UDim.new(0, 6)
+	tpBtnCorner.Parent = tpBtn
+	tpBtn.MouseButton1Click:Connect(function()
+		local name = tpInput.Text
+		if name == "" then return end
+		local data = xyFindTeleport(name)
+		if data then
+			xyTeleportTo(data.p)
+		end
 	end)
 
-	v27:OnDestroy(function()
-	flag8 = false
-	v27 = nil
-	end)
+	makeLabel(pTP, "--- 快捷传送 ---")
+	for _, loc in ipairs(TELEPORTS) do
+		local b = Instance.new("TextButton")
+		b.Size = UDim2.new(1, -10, 0, 24)
+		b.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		b.Text = loc.n
+		b.TextColor3 = Color3.fromRGB(255, 255, 255)
+		b.Font = Enum.Font.Gotham
+		b.TextSize = 11
+		b.Parent = pTP
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 5)
+		c.Parent = b
+		b.MouseButton1Click:Connect(function()
+			xyTeleportTo(loc.p)
+		end)
 	end
+
+	-- 关闭按钮
+	close.MouseButton1Click:Connect(function()
+		screenGui:Destroy()
+		flag8 = false
+		v27 = nil
+	end)
+
+	-- RightShift 切换显示
+	local UIS = game:GetService("UserInputService")
+	UIS.InputBegan:Connect(function(input, gp)
+		if gp then return end
+		if input.KeyCode == Enum.KeyCode.RightShift then
+			main.Visible = not main.Visible
+		end
+	end)
 
 	end
 
