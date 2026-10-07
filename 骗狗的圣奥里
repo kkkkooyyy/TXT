@@ -1,0 +1,231 @@
+-- 小亦 控制面板（演示版，功能未生效）
+-- 作者：小亦
+
+local player = game:GetService("Players").LocalPlayer
+
+-- ==================== 提示 ====================
+local function notify(text)
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "提示",
+        Text = text,
+        Duration = 3,
+    })
+end
+
+local FAKE_TIP = "还想免费玩？"
+
+-- ==================== 主界面 ====================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "XiaoYiUI"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0, 260, 0, 520)
+main.Position = UDim2.new(0, 40, 0.5, -260)
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+main.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = main
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(0, 150, 191)
+mainStroke.Thickness = 1.5
+mainStroke.Transparency = 0.3
+mainStroke.Parent = main
+
+-- ==================== 标题栏 ====================
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 36)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = main
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+local titleFix = Instance.new("Frame")
+titleFix.Size = UDim2.new(1, 0, 0, 18)
+titleFix.Position = UDim2.new(0, 0, 1, -18)
+titleFix.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
+titleFix.BorderSizePixel = 0
+titleFix.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -70, 1, 0)
+titleLabel.Position = UDim2.new(0, 12, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "小亦 控制面板"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 15
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local btnMin = Instance.new("TextButton")
+btnMin.Size = UDim2.new(0, 28, 0, 28)
+btnMin.Position = UDim2.new(1, -64, 0, 4)
+btnMin.BackgroundColor3 = Color3.fromRGB(0, 120, 160)
+btnMin.BorderSizePixel = 0
+btnMin.Text = "—"
+btnMin.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnMin.Font = Enum.Font.GothamBold
+btnMin.TextSize = 14
+btnMin.Parent = titleBar
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = btnMin
+
+local btnClose = Instance.new("TextButton")
+btnClose.Size = UDim2.new(0, 28, 0, 28)
+btnClose.Position = UDim2.new(1, -32, 0, 4)
+btnClose.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+btnClose.BorderSizePixel = 0
+btnClose.Text = "X"
+btnClose.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnClose.Font = Enum.Font.GothamBold
+btnClose.TextSize = 14
+btnClose.Parent = titleBar
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = btnClose
+
+-- ==================== 内容区 ====================
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, -20, 1, -50)
+content.Position = UDim2.new(0, 10, 0, 44)
+content.BackgroundTransparency = 1
+content.Parent = main
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 6)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = content
+
+-- ==================== 创建按钮 ====================
+local function createButton(text, realCallback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 32)
+    btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 13
+    btn.Parent = content
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 6)
+    c.Parent = btn
+
+    btn.MouseEnter:Connect(function()
+        btn.BackgroundColor3 = Color3.fromRGB(0, 150, 191)
+    end)
+    btn.MouseLeave:Connect(function()
+        btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    end)
+
+    btn.MouseButton1Click:Connect(function()
+        if realCallback then
+            realCallback()
+        else
+            notify(FAKE_TIP)
+        end
+    end)
+    return btn
+end
+
+local function createDivider()
+    local line = Instance.new("Frame")
+    line.Size = UDim2.new(1, 0, 0, 1)
+    line.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+    line.BorderSizePixel = 0
+    line.Parent = content
+    return line
+end
+
+local function createInput(placeholder, layoutOrder)
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, 0, 0, 30)
+    box.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+    box.BorderSizePixel = 0
+    box.Text = ""
+    box.PlaceholderText = placeholder
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.PlaceholderColor3 = Color3.fromRGB(150, 150, 160)
+    box.Font = Enum.Font.Gotham
+    box.TextSize = 13
+    box.LayoutOrder = layoutOrder or 0
+    box.Parent = content
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 6)
+    c.Parent = box
+    return box
+end
+
+-- ==================== 按钮列表 ====================
+createButton("小亦飞行：关")
+
+local speedBox = createInput("飞行速度（默认50）")
+speedBox.FocusLost:Connect(function()
+    notify(FAKE_TIP)
+end)
+
+createButton("前进 ▲")
+createButton("后退 ▼")
+createButton("左移 ◀")
+createButton("右移 ▶")
+createButton("上升 ↑")
+createButton("下降 ↓")
+
+createDivider()
+
+createButton("穿墙：关")
+createButton("移速：关")
+createButton("无限体力：关")
+createButton("伤害免疫：关")
+createButton("交互修改：关")
+
+createDivider()
+
+local tpBox = createInput("传送地点名")
+tpBox.FocusLost:Connect(function()
+    notify(FAKE_TIP)
+end)
+
+createButton("传送到地点")
+
+createDivider()
+
+createButton("关于", function()
+    notify("小亦 控制面板\n演示版")
+end)
+
+-- ==================== 最小化 / 关闭 ====================
+local minimized = false
+local fullHeight = 520
+
+btnMin.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    content.Visible = not minimized
+    if minimized then
+        main.Size = UDim2.new(0, 260, 0, 40)
+        btnMin.Text = "+"
+    else
+        main.Size = UDim2.new(0, 260, 0, fullHeight)
+        btnMin.Text = "—"
+    end
+end)
+
+btnClose.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+notify("面板已加载")
